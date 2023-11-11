@@ -7,43 +7,47 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
 if __name__ == '__main__':
+    tidal_train = pd.read_csv("./DATA/student-performance.csv")
 
-    tidal_train = pd.read_csv("./DATA/DATA.csv")
+    # Assume 'G3' is the label and rest are features
+    tidal_features = tidal_train.drop(['G3'], axis=1)
+    tidal_labels = tidal_train['G3']
 
-    tidal_features = tidal_train.drop(['GRADE', 'STUDENT ID'], axis=1)
-    tidal_labels = tidal_train.pop('GRADE')
-    print(tidal_labels)
+    # Identify categorical and numerical columns
+    # Replace these lists with your actual categorical and numerical columns
+    categorical_cols = ['school', 'sex', 'age', 'address', 'famsize', 'Pstatus', 'Mjob', 'Fjob', 'reason', 'guardian', 'schoolsup', 'famsup', 'paid', 'activities', 'nursery', 'higher', 'internet', 'romantic', 'G1', 'G2']  # Replace with actual categorical column names
+    numerical_cols = [col for col in tidal_features.columns if col not in categorical_cols]
 
-    tidal_features = np.array(tidal_features)
-    tidal_labels = np.array(tidal_labels)
-    tidal_features = tidal_features.astype(np.int32)  # Convert to tf.float32
-    tidal_labels = tidal_labels.astype(np.int32)  # Convert to tf.int32
+    # Create a column transformer
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', 'passthrough', numerical_cols),
+            ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_cols)
+        ])
 
-    # Split the data into training and testing sets
-    # Adjust test_size and random_state as needed
+    # Apply the transformations
     features_train, features_test, labels_train, labels_test = train_test_split(
-        tidal_features, tidal_labels, test_size=0.2, random_state=42, stratify=tidal_labels)
-    print(features_train.shape, features_test.shape, labels_train.shape, labels_test.shape)
-    categorical_features = range(tidal_features.shape[1])
+        tidal_features, tidal_labels, test_size=0.2, random_state=42)
 
-    # One-hot encode categorical features
-    encoder = OneHotEncoder(handle_unknown='ignore', sparse=False)
-    features_train_encoded = encoder.fit_transform(features_train)
-    features_test_encoded = encoder.transform(features_test)
+    features_train_encoded = preprocessor.fit_transform(features_train)
+    features_test_encoded = preprocessor.transform(features_test)
+
+    # Adjusted input shape for the model
+    input_shape = features_train_encoded.shape[1]
 
     # Build the model
     model = tf.keras.Sequential([
-        tf.keras.layers.Input(shape=(features_train_encoded.shape[1],)),
         tf.keras.layers.Dense(64, activation='relu'),
-        tf.keras.layers.Dense(10, activation='softmax')  # Assuming 10 classes, adjust accordingly
+        tf.keras.layers.Dense(20, activation='softmax')  # Adjust the number of units in the output layer as needed
     ])
 
     # Compile the model
-    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['categorical_accuracy'])
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
+    model.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
     # Train the model
-    model.fit(features_train_encoded, labels_train, epochs=10, batch_size=32, validation_split=0.2)
+    model.fit(features_train_encoded, labels_train, epochs=100, batch_size=32, validation_split=0.2)
 
     # Evaluate the model on the test set
-    test_loss, test_accuracy = model.evaluate(features_test_encoded, features_test)
+    test_loss, test_accuracy = model.evaluate(features_test_encoded, labels_test)
     print(f'Test Accuracy: {test_accuracy * 100:.2f}%')
